@@ -264,8 +264,8 @@ struct General3x3Convolution {
   static void Run(const Image3F& in, const size_t xsize, const size_t ysize,
                   const Kernel& kernel, Image3F* out) {
     for (int c = 0; c < 3; ++c) {
-      Run(in.plane(c), xsize, ysize, kernel,
-          const_cast<ImageF*>(&out->plane(c)));
+      Run(in.Plane(c), xsize, ysize, kernel, out->MutablePlane(c));
+      out->CheckSizesSame();
     }
   }
 };
@@ -311,8 +311,7 @@ class SymmetricConvolution {
                   const float (&weights)[(kRadius + 1) * (kRadius + 1)],
                   Image3F* out) {
     for (int c = 0; c < 3; ++c) {
-      Run(in.plane(c), xsize, ysize, weights,
-          const_cast<ImageF*>(&out->plane(c)));
+      Run(in.Plane(c), xsize, ysize, weights, out->MutablePlane(c));
     }
   }
 
@@ -513,7 +512,6 @@ namespace strategy {
 class Symmetric3 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 1;
@@ -526,6 +524,7 @@ class Symmetric3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -600,6 +599,7 @@ class Symmetric3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& PIK_RESTRICT weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -643,6 +643,7 @@ class Symmetric3 {
                                     const float* PIK_RESTRICT row_b,
                                     const int64_t x, const V w0, const V w1,
                                     const V w2) {
+    const D d;
     const V tc = load_unaligned(d, row_t + x);
     const V mc = load_unaligned(d, row_m + x);
     const V bc = load_unaligned(d, row_b + x);
@@ -660,7 +661,6 @@ class Symmetric3 {
 class GradX3 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 1;
@@ -673,6 +673,7 @@ class GradX3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -745,6 +746,7 @@ class GradX3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& PIK_RESTRICT weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -777,6 +779,7 @@ class GradX3 {
                                     const float* PIK_RESTRICT row_m,
                                     const float* PIK_RESTRICT row_b,
                                     const int64_t x, const V wtb, const V wm) {
+    const D d;
     const V tl = load_unaligned(d, row_t + x - 1);
     const V tr = load_unaligned(d, row_t + x + 1);
     const V ml = load_unaligned(d, row_m + x - 1);
@@ -791,7 +794,6 @@ class GradX3 {
 class GradY3 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 1;
@@ -804,6 +806,7 @@ class GradY3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -868,6 +871,7 @@ class GradY3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& PIK_RESTRICT weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -899,6 +903,7 @@ class GradY3 {
   static PIK_INLINE V ConvolveValid(const float* PIK_RESTRICT row_t,
                                     const float* PIK_RESTRICT row_b,
                                     const int64_t x, const V wlr, const V wc) {
+    const D d;
     const V tc = load_unaligned(d, row_t + x);
     const V bc = load_unaligned(d, row_b + x);
     const V tl = load_unaligned(d, row_t + x - 1);
@@ -913,7 +918,6 @@ class GradY3 {
 class Corner3 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 1;
@@ -926,6 +930,7 @@ class Corner3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -989,6 +994,7 @@ class Corner3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& PIK_RESTRICT weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -1016,6 +1022,7 @@ class Corner3 {
   static PIK_INLINE V ConvolveValid(const float* PIK_RESTRICT row_t,
                                     const float* PIK_RESTRICT row_b,
                                     const int64_t x, const V w) {
+    const D d;
     const V tl = load_unaligned(d, row_t + x - 1);
     const V tr = load_unaligned(d, row_t + x + 1);
     const V bl = load_unaligned(d, row_b + x - 1);
@@ -1028,7 +1035,6 @@ class Corner3 {
 class Laplacian3 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 1;
@@ -1041,6 +1047,7 @@ class Laplacian3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -1111,6 +1118,7 @@ class Laplacian3 {
                                      const WrapRow& wrap_row,
                                      const Weights3x3& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     // t, m, b = top, middle, bottom row;
     const float* const PIK_RESTRICT row_t = wrap_row(row_m - stride, stride);
     const float* const PIK_RESTRICT row_b = wrap_row(row_m + stride, stride);
@@ -1148,7 +1156,6 @@ class Laplacian3 {
 class Separable5 {
   using D = SIMD_NAMESPACE::Full<float>;
   using V = D::V;
-  static const D d;
 
  public:
   static constexpr int64_t kRadius = 2;
@@ -1160,6 +1167,7 @@ class Separable5 {
                                      const WrapRow& wrap_row,
                                      const WeightsSeparable5& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     const int64_t neg_stride = -stride;  // allows LEA addressing.
     const float* const PIK_RESTRICT row_t2 =
         wrap_row(row_m + 2 * neg_stride, stride);
@@ -1256,6 +1264,7 @@ class Separable5 {
                                      const WrapRow& wrap_row,
                                      const WeightsSeparable5& weights,
                                      float* const PIK_RESTRICT row_out) {
+    const D d;
     const int64_t neg_stride = -stride;  // allows LEA addressing.
     const float* const PIK_RESTRICT row_t2 =
         wrap_row(row_m + 2 * neg_stride, stride);
@@ -1294,6 +1303,7 @@ class Separable5 {
   static PIK_INLINE V HorzConvolveFirst(const float* const PIK_RESTRICT row,
                                         const int64_t x, const int64_t xsize,
                                         const V wh0, const V wh1, const V wh2) {
+    const D d;
     const V c = load_unaligned(d, row + x);
     const V mul0 = c * wh0;
 
@@ -1317,6 +1327,7 @@ class Separable5 {
   static PIK_INLINE V HorzConvolveLast(const float* const PIK_RESTRICT row,
                                        const int64_t x, const int64_t xsize,
                                        const V wh0, const V wh1, const V wh2) {
+    const D d;
     const V c = load_unaligned(d, row + x);
     const V mul0 = c * wh0;
 
@@ -1349,6 +1360,7 @@ class Separable5 {
   // Requires kRadius valid pixels before/after pos.
   static PIK_INLINE V HorzConvolve(const float* const PIK_RESTRICT pos,
                                    const V wh0, const V wh1, const V wh2) {
+    const D d;
     const V c = load_unaligned(d, pos);
     const V mul0 = c * wh0;
 
@@ -1378,6 +1390,10 @@ struct BorderNeverUsed {};
 // Slow: Convolve calls PadImage and requires bounds checks.
 struct BorderNeedsInit {};
 
+// 3x3 kernels require inputs at least this wide - for the first vector, they
+// load right neighbors (N lanes starting from x + 1).
+static constexpr size_t kConvolveMinWidth = SIMD_NAMESPACE::Full<float>::N + 1;
+
 // Single entry point for convolution.
 // "Strategy" (Direct*/Separable*) decides kernel size and how to evaluate it.
 template <class Strategy>
@@ -1406,7 +1422,7 @@ class ConvolveT {
     PIK_CHECK(SameSize(in, *out));
     const size_t xsize = in.xsize();
     const size_t ysize = in.ysize();
-    PIK_CHECK(xsize >= SIMD_NAMESPACE::Full<float>::N);  // For BorderNeverUsed.
+    PIK_CHECK(xsize >= kConvolveMinWidth);  // For BorderNeverUsed.
 
     RunImpl(border, executor, in, xsize, ysize, kernel, out);
   }
@@ -1417,11 +1433,11 @@ class ConvolveT {
     PIK_CHECK(SameSize(in, *out));
     const size_t xsize = in.xsize();
     const size_t ysize = in.ysize();
-    PIK_CHECK(xsize >= SIMD_NAMESPACE::Full<float>::N);  // For BorderNeverUsed.
+    PIK_CHECK(xsize >= kConvolveMinWidth);  // For BorderNeverUsed.
 
     for (int c = 0; c < 3; ++c) {
-      RunImpl(border, executor, in.plane(c), xsize, ysize, kernel,
-              &out->plane(c));
+      RunImpl(border, executor, in.Plane(c), xsize, ysize, kernel,
+              &out->Plane(c));
     }
   }
 

@@ -21,14 +21,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <algorithm>  // find_if  TODO: remove after PerThread
+#include <algorithm>  // max
 #include <atomic>
 #include <condition_variable>  //NOLINT
 #include <cstdlib>
-#include <memory>
 #include <mutex>   //NOLINT
 #include <thread>  //NOLINT
 #include <vector>
+
+#include "bits.h"
 
 #define DATA_PARALLEL_CHECK(condition)                           \
   while (!(condition)) {                                         \
@@ -75,6 +76,13 @@ class ThreadPool {
     DATA_PARALLEL_CHECK(num_threads >= 0);
     DATA_PARALLEL_CHECK(num_threads <= kMaxThreads);
     threads_.reserve(num_threads);
+
+    // Suppress "unused-private-field" warning.
+    (void)padding;
+
+    // Safely handle spurious worker wakeups.
+    worker_start_command_ = kWorkerWait;
+
     for (int i = 0; i < num_threads; ++i) {
       threads_.emplace_back(ThreadFunc, this, i);
     }
@@ -175,9 +183,13 @@ class ThreadPool {
 
   void WorkersReadyBarrier() {
     std::unique_lock<std::mutex> lock(mutex_);
-    workers_ready_cv_.wait(
-        lock, [this]() { return workers_ready_ == threads_.size(); });
+    while (workers_ready_ != threads_.size()) {
+      workers_ready_cv_.wait(lock);
+    }
     workers_ready_ = 0;
+
+    // Safely handle spurious worker wakeups.
+    worker_start_command_ = kWorkerWait;
   }
 
   // Precondition: all workers are ready.
@@ -311,7 +323,7 @@ struct ExecutorPool {
 class Divider {
  public:
   // "d" is the divisor (what to divide by).
-  Divider(const uint32_t d) : shift_(31 - __builtin_clz(d)) {
+  Divider(const uint32_t d) : shift_(FloorLog2Nonzero(d)) {
     // Power of two divisors (including 1) are not supported because it is more
     // efficient to special-case them at a higher level.
     DATA_PARALLEL_CHECK((d & (d - 1)) != 0);

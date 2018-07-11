@@ -10,9 +10,11 @@
 
 namespace pik {
 
+const double kPi = 3.1415926535897932;
+
 void AssertSymmetric(const ImageD& A) {
 #if defined(PIK_ENABLE_ASSERT)
-  PIK_ASSERT(A.xsize()== A.ysize());
+  PIK_ASSERT(A.xsize() == A.ysize());
   for (size_t i = 0; i < A.xsize(); ++i) {
     for (size_t j = i + 1; j < A.xsize(); ++j) {
       PIK_ASSERT(std::abs(A.Row(i)[j] - A.Row(j)[i]) < 1e-15);
@@ -21,15 +23,15 @@ void AssertSymmetric(const ImageD& A) {
 #endif
 }
 
-void Diagonalize2x2(const double a0, const double a1, const double b,
-                    double* c, double* s) {
+void Diagonalize2x2(const double a0, const double a1, const double b, double* c,
+                    double* s) {
   if (std::abs(b) < 1e-15) {
     *c = 1.0;
     *s = 0.0;
     return;
   }
   double phi = std::atan2(2 * b, a1 - a0);
-  double theta = b > 0.0 ? 0.5 * phi : 0.5 * phi + M_PI;
+  double theta = b > 0.0 ? 0.5 * phi : 0.5 * phi + kPi;
   *c = std::cos(theta);
   *s = std::sin(theta);
 }
@@ -46,8 +48,8 @@ void GivensRotation(const double x, const double y, double* c, double* s) {
   }
 }
 
-void RotateMatrixCols(ImageD* const PIK_RESTRICT U,
-                      int i, int j, double c, double s) {
+void RotateMatrixCols(ImageD* const PIK_RESTRICT U, int i, int j, double c,
+                      double s) {
   PIK_ASSERT(U->xsize() == U->ysize());
   const size_t N = U->xsize();
   double* const PIK_RESTRICT u_i = U->Row(i);
@@ -64,20 +66,6 @@ void RotateMatrixCols(ImageD* const PIK_RESTRICT U,
     u_j[k] = rot_j[k];
   }
 }
-
-void RotateMatrixRows(ImageD* const PIK_RESTRICT U,
-                      int i, int j, double c, double s) {
-  PIK_ASSERT(U->xsize() == U->ysize());
-  const size_t N = U->xsize();
-  for (size_t k = 0; k < N; ++k) {
-    double* const PIK_RESTRICT row = U->Row(k);
-    const double r_i = row[i] * c - row[j] * s;
-    const double r_j = row[i] * s + row[j] * c;
-    row[i] = r_i;
-    row[j] = r_j;
-  }
-}
-
 void HouseholderReflector(const size_t N, const double* x, double* u) {
   const double sigma = x[0] <= 0.0 ? 1.0 : -1.0;
   u[0] = x[0] - sigma * std::sqrt(DotProduct(N, x, x));
@@ -90,8 +78,7 @@ void HouseholderReflector(const size_t N, const double* x, double* u) {
   }
 }
 
-void ConvertToTridiagonal(const ImageD& A,
-                          ImageD* const PIK_RESTRICT T,
+void ConvertToTridiagonal(const ImageD& A, ImageD* const PIK_RESTRICT T,
                           ImageD* const PIK_RESTRICT U) {
   AssertSymmetric(A);
   const size_t N = A.xsize();
@@ -100,7 +87,8 @@ void ConvertToTridiagonal(const ImageD& A,
   std::vector<ImageD> u_stack;
   for (size_t k = 0; k + 2 < N; ++k) {
     if (DotProduct(N - k - 2, &T->Row(k)[k + 2], &T->Row(k)[k + 2]) > 1e-15) {
-      ImageD u(N, 1, 0.0);
+      ImageD u(N, 1);
+      FillImage(0.0, &u);
       HouseholderReflector(N - k - 1, &T->Row(k)[k + 1], &u.Row(0)[k + 1]);
       ImageD v = MatMul(*T, u);
       double scale = DotProduct(u, v);
@@ -123,14 +111,12 @@ double WilkinsonShift(const double a0, const double a1, const double b) {
   if (d == 0.0) {
     return a1 - std::abs(b);
   }
-  const double sign_d =  d > 0.0 ? 1.0 : -1.0;
+  const double sign_d = d > 0.0 ? 1.0 : -1.0;
   return a1 - b * b / (d + sign_d * std::hypot(d, b));
 }
 
-void ImplicitQRStep(ImageD* const PIK_RESTRICT U,
-                    double* const PIK_RESTRICT a,
-                    double* const PIK_RESTRICT b,
-                    int m0, int m1) {
+void ImplicitQRStep(ImageD* const PIK_RESTRICT U, double* const PIK_RESTRICT a,
+                    double* const PIK_RESTRICT b, int m0, int m1) {
   PIK_ASSERT(m1 - m0 > 2);
   double x = a[m0] - WilkinsonShift(a[m1 - 2], a[m1 - 1], b[m1 - 1]);
   double y = b[m0 + 1];
@@ -156,9 +142,8 @@ void ImplicitQRStep(ImageD* const PIK_RESTRICT U,
 }
 
 void ScanInterval(const double* const PIK_RESTRICT a,
-                  const double* const PIK_RESTRICT b,
-                  int istart, const int iend,
-                  const double eps,
+                  const double* const PIK_RESTRICT b, int istart,
+                  const int iend, const double eps,
                   std::deque<std::pair<int, int> >* intervals) {
   for (int k = istart; k < iend; ++k) {
     if ((k + 1 == iend) ||
@@ -171,8 +156,7 @@ void ScanInterval(const double* const PIK_RESTRICT a,
   }
 }
 
-void ConvertToDiagonal(const ImageD& A,
-                       ImageD* const PIK_RESTRICT diag,
+void ConvertToDiagonal(const ImageD& A, ImageD* const PIK_RESTRICT diag,
                        ImageD* const PIK_RESTRICT U) {
   AssertSymmetric(A);
   const size_t N = A.xsize();
@@ -218,8 +202,7 @@ void ConvertToDiagonal(const ImageD& A,
   }
 }
 
-void ComputeQRFactorization(const ImageD& A,
-                            ImageD* const PIK_RESTRICT Q,
+void ComputeQRFactorization(const ImageD& A, ImageD* const PIK_RESTRICT Q,
                             ImageD* const PIK_RESTRICT R) {
   PIK_ASSERT(A.xsize() == A.ysize());
   const size_t N = A.xsize();
@@ -228,7 +211,8 @@ void ComputeQRFactorization(const ImageD& A,
   std::vector<ImageD> u_stack;
   for (size_t k = 0; k + 1 < N; ++k) {
     if (DotProduct(N - k - 1, &R->Row(k)[k + 1], &R->Row(k)[k + 1]) > 1e-15) {
-      ImageD u(N, 1, 0.0);
+      ImageD u(N, 1);
+      FillImage(0.0, &u);
       HouseholderReflector(N - k, &R->Row(k)[k], &u.Row(0)[k]);
       ImageD v = MatMul(Transpose(u), *R);
       SubtractFrom(ScaleImage(2.0, MatMul(u, v)), R);
@@ -242,220 +226,4 @@ void ComputeQRFactorization(const ImageD& A,
     u_stack.pop_back();
   }
 }
-
-// Multiplies *A with IGT(i, j, mu) from the right, where
-// IGT(i, j, mu) = I + mu*e_i*Transpose(e_j).
-template<typename T>
-void ApplyIGTCol(const size_t i, const size_t j, int mu,
-                 Image<T>* const PIK_RESTRICT A) {
-  const T* const PIK_RESTRICT a_i = A->ConstRow(i);
-  T* const PIK_RESTRICT a_j = A->Row(j);
-  for (size_t k = 0; k < A->xsize(); ++k) {
-    a_j[k] += mu * a_i[k];
-  }
-}
-
-// Multiplies *A with IGT(i, j, mu) from the left.
-template<typename T>
-void ApplyIGTRow(const size_t i, const size_t j, int mu,
-                 Image<T>* const PIK_RESTRICT A) {
-  for (size_t k = 0; k < A->ysize(); ++k) {
-    T* const PIK_RESTRICT a_k = A->Row(k);
-    a_k[i] += mu * a_k[j];
-  }
-}
-
-template<typename T>
-void SwapMatrixCols(const size_t i, const size_t j,
-                    Image<T>* const PIK_RESTRICT A) {
-  T* const PIK_RESTRICT a_i = A->Row(i);
-  T* const PIK_RESTRICT a_j = A->Row(j);
-  for (size_t k = 0; k < A->xsize(); ++k) {
-    std::swap(a_i[k], a_j[k]);
-  }
-}
-
-template<typename T>
-void SwapMatrixRows(const size_t i, const size_t j,
-                    Image<T>* const PIK_RESTRICT A) {
-  for (size_t k = 0; k < A->ysize(); ++k) {
-    T* const PIK_RESTRICT a_k = A->Row(k);
-    std::swap(a_k[i], a_k[j]);
-  }
-}
-
-template<typename T>
-void MirrorMatrixCol(const size_t i, Image<T>* const PIK_RESTRICT A) {
-  T* const PIK_RESTRICT a_i = A->Row(i);
-  for (size_t k = 0; k < A->xsize(); ++k) {
-    a_i[k] = -a_i[k];
-  }
-}
-
-template<typename T>
-void MirrorMatrixRow(const size_t i, Image<T>* const PIK_RESTRICT A) {
-  for (size_t k = 0; k < A->ysize(); ++k) {
-    T* const PIK_RESTRICT a_k = A->Row(k);
-    a_k[i] = -a_k[i];
-  }
-}
-
-void ComputeLLLReduction(const ImageD& A,
-                         ImageD* const PIK_RESTRICT Q,
-                         ImageD* const PIK_RESTRICT R,
-                         ImageI* const PIK_RESTRICT Z,
-                         ImageI* const PIK_RESTRICT ZI) {
-  PIK_ASSERT(A.xsize() == A.ysize());
-  const size_t N = A.xsize();
-  ComputeQRFactorization(A, Q, R);
-  *Z = Identity<int>(N);
-  *ZI = Identity<int>(N);
-  for (size_t i = 0; i < N; ++i) {
-    if (R->Row(i)[i] < 0.0) {
-      MirrorMatrixCol(i, R);
-      MirrorMatrixCol(i, Z);
-      MirrorMatrixRow(i, ZI);
-    }
-  }
-  for (int k = 0; k + 1 < N; ++k) {
-    double* const PIK_RESTRICT r_k = R->Row(k);
-    double* const PIK_RESTRICT r_k1 = R->Row(k + 1);
-    for (int i = k; i >= 0; --i) {
-      int mu = static_cast<int>(std::round(r_k1[i] / R->Row(i)[i]));
-      if (mu != 0) {
-        ApplyIGTCol(i, k + 1, -mu, R);
-        ApplyIGTCol(i, k + 1, -mu, Z);
-        ApplyIGTRow(i, k + 1, mu, ZI);
-      }
-    }
-    if (r_k[k] > std::hypot(r_k1[k], r_k1[k + 1])) {
-      SwapMatrixCols(k, k + 1, R);
-      SwapMatrixCols(k, k + 1, Z);
-      SwapMatrixRows(k, k + 1, ZI);
-      double c, s;
-      GivensRotation(r_k[k], r_k[k + 1], &c, &s);
-      RotateMatrixRows(R, k, k + 1, c, s);
-      RotateMatrixCols(Q, k, k + 1, c, s);
-      if (r_k1[k + 1] < 0.0) {
-        MirrorMatrixCol(k + 1, R);
-        MirrorMatrixCol(k + 1, Z);
-        MirrorMatrixRow(k + 1, ZI);
-      }
-      k = k > 0 ? k - 2 : -1;
-    }
-  }
-}
-
-void SearchLattice(const ImageD& R,
-                   const ImageD& y,
-                   const std::vector<double>& Rd,
-                   const std::vector<double>& iRd,
-                   ImageI* const PIK_RESTRICT z0) {
-  PIK_ASSERT(R.xsize() == R.ysize());
-  PIK_ASSERT(R.xsize() == y.xsize());
-  PIK_ASSERT(y.ysize() == 1);
-  const size_t N = R.xsize();
-  *z0 = ImageI(N, 1, 0);
-  std::vector<int> z(N);
-  std::vector<int> step(N);
-  std::vector<double> center(N);
-  double search_radius_sq = std::numeric_limits<double>::max();
-  int k = N - 1;
-  for (;;) {
-    double sum = 0.0;
-    for (int i = k + 1; i < N; ++i) {
-      sum += R.Row(i)[k] * z[i];
-    }
-    center[k] = (y.Row(0)[k] - sum) * iRd[k];
-    z[k] = std::round(center[k]);
-    step[k] = center[k] < z[k] ? -1 : 1;
-    for (;;) {
-      double sumsq = 0.0;
-      for (int i = k; i < N; ++i) {
-        double v = Rd[i] * (z[i] - center[i]);
-        sumsq += v * v;
-      }
-      if (sumsq > search_radius_sq) {
-        if (k == N - 1) {
-          // There are no more integer points within the search ellipsoid, the
-          // integer vector that we found last was the optimal solution.
-          return;
-        }
-        // The current integer vector [ * * * * zk, z(k+1), ..., z(N-1) ]
-        // can not be extended to an integer point within the search ellipsoid,
-        // so we cut this branch and go back to the previous level of the tree.
-        ++k;
-      } else if (k > 0) {
-        // Go down one level in the tree.
-        --k;
-        break;
-      } else {
-        // We found an integer point in the search ellipsoid, update the
-        // output vector and set the new search radius.
-        for (int j = 0; j < N; ++j) {
-          z0->Row(0)[j] = z[j];
-        }
-        search_radius_sq = sumsq;
-        ++k;
-      }
-      // Iterate on the current level of the tree using the Schnorr-Euchner
-      // enumeration order.
-      z[k] += step[k];
-      step[k] = -step[k] + (step[k] < 0 ? 1 : - 1);
-    }
-  }
-}
-
-void LatticeOptimizer::InitFromLatticeBasis(const ImageD& A) {
-  PIK_ASSERT(A.xsize() == A.ysize());
-  const size_t N = A.xsize();
-  ImageI ZI;
-  ComputeLLLReduction(A, &Qt_, &R_, &Z_, &ZI);
-  Qt_ = Transpose(Qt_);
-  Rd_.reserve(N);
-  iRd_.reserve(N);
-  for (int i = 0; i < N; ++i) {
-    const double r_ii = R_.Row(i)[i];
-    Rd_.push_back(r_ii);
-    iRd_.push_back(1.0 / r_ii);
-  }
-}
-
-void LatticeOptimizer::InitFromQuadraticForm(const ImageD& A) {
-  PIK_ASSERT(A.xsize() == A.ysize());
-  const size_t N = A.xsize();
-  ImageD Q, d;
-  ConvertToDiagonal(A, &d, &Q);
-  for (size_t k = 0; k < N; ++k) {
-    PIK_ASSERT(d.Row(0)[k] > 0.0);
-    d.Row(0)[k] = std::sqrt(d.Row(0)[k]);
-  }
-  ImageD B = MatMul(Diagonal(d), Transpose(Q));
-  InitFromLatticeBasis(B);
-  Qt_ = MatMul(Qt_, B);
-}
-
-void LatticeOptimizer::Search(const ImageD& y,
-                              ImageI* const PIK_RESTRICT z0) const {
-  PIK_ASSERT(R_.xsize() == y.xsize());
-  PIK_ASSERT(y.ysize() == 1);
-  ImageD yt = MatMul(Qt_, y);
-  SearchLattice(R_, yt, Rd_, iRd_, z0);
-  *z0 = MatMulI(Z_, *z0);
-}
-
-void FindClosestLatticeVector(const ImageD& A, const ImageD& y,
-                              ImageI* const PIK_RESTRICT z0) {
-  LatticeOptimizer lattice;
-  lattice.InitFromLatticeBasis(A);
-  lattice.Search(y, z0);
-}
-
-void OptimizeIntegerQuadraticForm(const ImageD& A, const ImageD& y,
-                                  ImageI* const PIK_RESTRICT z0) {
-  LatticeOptimizer lattice;
-  lattice.InitFromQuadraticForm(A);
-  lattice.Search(y, z0);
-}
-
 }  // namespace pik

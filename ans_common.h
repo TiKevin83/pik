@@ -12,24 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Library to decode a histogram from the bit-stream.
-
-#ifndef HISTOGRAM_DECODE_H_
-#define HISTOGRAM_DECODE_H_
+#ifndef ANS_COMMON_H_
+#define ANS_COMMON_H_
 
 #include <vector>
 
-#include "bit_reader.h"
+#include "compiler_specific.h"
 
 namespace pik {
 
-// Decodes a histogram from the bit-stream where the sum of all population
-// counts is 1 << precision_bits.
-// Fills in *counts with the decoded population count values.
-// Returns false on decoding error.
-bool ReadHistogram(int precision_bits, std::vector<int>* counts,
-                   BitReader* input);
+// Returns the precision (number of bits) that should be used to store
+// a histogram count such that Log2Floor(count) == logcount.
+PIK_INLINE int GetPopulationCountPrecision(int logcount) {
+  return (logcount + 1) >> 1;
+}
+
+// Returns a histogram where the counts are positive, differ by at most 1,
+// and add up to total_count. The bigger counts (if any) are at the beginning
+// of the histogram.
+std::vector<int> CreateFlatHistogram(int length, int total_count);
 
 }  // namespace pik
 
-#endif  // HISTOGRAM_DECODE_H_
+#endif  // ANS_COMMON_H_

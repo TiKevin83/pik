@@ -25,12 +25,12 @@
 #include "common.h"
 #include "compiler_specific.h"
 #include "dct.h"
-#include "opsin_codec.h"
+#include "entropy_coder.h"
 #include "profiler.h"
+#include "simd/simd.h"
 
 namespace pik {
 
-static const int kQuantMax = 256;
 static const int kDefaultQuant = 64;
 
 // kQuantWeights[3 * k_zz + c] is the relative weight of the k_zz coefficient
@@ -39,147 +39,147 @@ static const int kDefaultQuant = 64;
 const double *GetQuantWeights() {
   static double kQuantWeights[kNumQuantTables * 192] = {
     // Default weights
-    4.17317809454045818,
-    0.78610731495045172,
-    0.37882522164694349,
-    8.85240954685175474,
-    0.77006744022797247,
-    0.34592384547663707,
-    6.31754060852936572,
-    0.65117532248878540,
-    0.12799474757657134,
-    1.77624432097713192,
-    0.57425978648632270,
-    0.07506112044912261,
-    4.15821627160268292,
-    0.53552152065201664,
-    0.27926363344859639,
-    3.34913959033952580,
-    0.50458211659794583,
-    0.04361602490215615,
-    2.28399714918438157,
-    0.42933264930396459,
-    0.03755467690066183,
-    1.49450037455606899,
-    0.37735050844972057,
-    0.05956030004378896,
-    2.39757305639016716,
-    0.38481842768033758,
-    0.05831348097451651,
-    1.12653252382559543,
-    0.27950664559970084,
-    0.04382792405506560,
-    1.21844604734873840,
-    0.27471002210345935,
-    0.04666653179163888,
-    1.53097794217538463,
-    0.30106751892219696,
-    0.06307726671068764,
-    1.22200655849294804,
-    0.33280821723596504,
-    0.03941220015763471,
-    1.17524697541422518,
-    0.28638305663379554,
-    0.03208522877711826,
-    0.75127670491071263,
-    0.31850859296657152,
-    0.04486109540684686,
-    0.77226565243518897,
-    0.27748922010630672,
-    0.04666344078529713,
-    1.08735121501276844,
-    0.27827093784126850,
-    0.06336382689520687,
-    1.43070752477721830,
-    0.30536844765425886,
-    0.06902888503033432,
-    1.53272631030449369,
-    0.29465822125474284,
-    0.08152654336613070,
-    1.18204966394055289,
-    0.26817960183599288,
-    0.05485040455888805,
-    0.62656733575737089,
-    0.23756652529604391,
-    0.03756587495986300,
-    1.10504462098241163,
-    0.17220175263887857,
-    0.04556256391383898,
-    0.85614468706807267,
-    0.22529898347062727,
-    0.05236708614758520,
-    1.30435943636811436,
-    0.30941439681151084,
-    0.04238731948096763,
-    1.32889262754232940,
-    0.28605664583271589,
-    0.01713126997120093,
-    1.49622670357677845,
-    0.27429259374843751,
-    0.01962416370801040,
-    1.04717555087763192,
-    0.22620065718631438,
-    0.02537455797619659,
-    0.51628278614639511,
-    0.18239311116210799,
-    0.05836337499537232,
-    0.73765048702465486,
-    0.24404670751376545,
-    0.05632547478810192,
-    0.68930392008555674,
-    0.19824929843321470,
-    0.06011182828535343,
-    1.11544802314041691,
-    0.28150674187369507,
-    0.01872402421593500,
-    1.12587494392587240,
-    0.24557680817217800,
-    0.05628977364980435,
-    1.27610588177249551,
-    0.24829994562860350,
-    0.01568278529124948,
-    0.27124628277771612,
-    0.24184577922053010,
-    0.01641154704224334,
-    0.49960619272689105,
-    0.14880294705145591,
-    0.02120221186383324,
-    0.49054627277348750,
-    0.15820647192633827,
-    0.04441491696411323,
-    0.44268509077766055,
-    0.13054815824946345,
-    0.02853325147404644,
-    0.72675696782743338,
-    0.17959032230796884,
-    0.03827182757786673,
-    0.45353712375759447,
-    0.20336962941402578,
-    0.01944649630481815,
-    0.49065874330351711,
-    0.20258067046833647,
-    0.02001011477293114,
-    1.49730803384489475,
-    0.21501134116920845,
-    0.06141297175035317,
-    0.69127686095520724,
-    0.19551874107857661,
-    0.01598200751864970,
-    1.07606674044062833,
-    0.15736561084498937,
-    0.03185237044694969,
-    0.78276072932847207,
-    0.18546365337596354,
-    0.01866152687570816,
-    0.53435941821522404,
-    0.22550722418265939,
-    0.01710216656233201,
-    0.64941563816847947,
-    0.22261844590297536,
-    0.02028596575405426,
-    0.67208745940973336,
-    0.22651935654167457,
-    0.03213907062303008,
+    4.3141203228013438,
+    0.83740203419092563,
+    0.51137522717087869,
+    8.736834574015262,
+    0.7776397194427076,
+    0.13442931289541543,
+    6.3379346742508131,
+    0.70692883300525067,
+    0.12368899522321172,
+    1.7679749651060572,
+    0.65347325775644483,
+    0.23333737574436145,
+    4.1820889419933449,
+    0.61826473894479117,
+    0.16390510194206945,
+    3.321466890319678,
+    0.50605143545289055,
+    0.1042338362877393,
+    2.2121858502448699,
+    0.39737454618364199,
+    0.039923519117012793,
+    1.5048430743835741,
+    0.44253191996134272,
+    0.081069424968966131,
+    2.4362778754556715,
+    0.43257013459329918,
+    0.074344935656858804,
+    1.1783892036481227,
+    0.30224131501589768,
+    0.035528575800878801,
+    1.3283725533453592,
+    0.22521680805375197,
+    0.081862698246215573,
+    1.5580768395244231,
+    0.25349576252750305,
+    0.11241739107306357,
+    1.1384409237139839,
+    0.32444867301666058,
+    0.069356620702463886,
+    1.1693363410240802,
+    0.22720605247313719,
+    0.072073951417197107,
+    0.76754319201101462,
+    0.21674064978995528,
+    0.049027879973039395,
+    0.64727928422122272,
+    0.18328656176888211,
+    0.063889525390303029,
+    1.1045513421611661,
+    0.21585103511079337,
+    0.074571320833125856,
+    1.4832095549023419,
+    0.24363059692829409,
+    0.046613553523984899,
+    1.5262612594710887,
+    0.2658115196632741,
+    0.095593946920371917,
+    1.2583542418439091,
+    0.20278784329053368,
+    0.10198656903794691,
+    0.42008027458003649,
+    0.12917105983800514,
+    0.10283606990457778,
+    1.2115017196865743,
+    0.12382691731111502,
+    0.1118578524826251,
+    1.0284671621456556,
+    0.13754624577284763,
+    0.065629383999491628,
+    1.2151126659170599,
+    0.20578654159697155,
+    0.067402764565903606,
+    1.3360284442899479,
+    0.18668594655278073,
+    0.056478124053817289,
+    1.3941851810988457,
+    0.18141839274334995,
+    0.069418113786006708,
+    1.0857335532257077,
+    0.14874461747004106,
+    0.071432726113976608,
+    0.49362766892933202,
+    0.10020854148621977,
+    0.027582794969484382,
+    0.65702715944968204,
+    0.096304882733300276,
+    0.091792356939215544,
+    0.32829090137286626,
+    0.076386710316435236,
+    0.012417922327300664,
+    0.83052927891064143,
+    0.15665165444878068,
+    0.043896269389724109,
+    1.0434079920710564,
+    0.21053548494276011,
+    0.046276756365166177,
+    1.2094211085965179,
+    0.16230067189998562,
+    0.066730255542867128,
+    0.24506686179103726,
+    0.11717160108133351,
+    0.071165909610693245,
+    0.5961782045984203,
+    0.10906846987703636,
+    0.1074957435127179,
+    0.37538159142202759,
+    0.071397660203107588,
+    0.050158510029965957,
+    0.28792379690718628,
+    0.088841068516194235,
+    0.032875806394252971,
+    0.56685852046049934,
+    0.16199207885726091,
+    0.070272384862404516,
+    0.60238104605220288,
+    0.13140304193241348,
+    0.036894168984050693,
+    0.43756449773263967,
+    0.10538224819307006,
+    0.061117235994783574,
+    1.445481349271859,
+    0.11056598177328424,
+    0.10550134542793914,
+    0.62668250672205428,
+    0.1363109543481357,
+    0.090595671257557658,
+    0.93212201984338217,
+    0.091816676840817527,
+    0.065804682083453414,
+    0.77349681213167532,
+    0.094966685329228195,
+    0.046235492735370469,
+    0.43544066126588366,
+    0.14585995730471052,
+    0.13016576971130089,
+    0.53449533631624657,
+    0.16736010700087711,
+    0.11194695994990535,
+    0.66297724883130826,
+    0.13362584923010118,
+    0.027664198156865393,
     1.37558530050399797,
     0.19032544668628112,
     0.06550400570919304,
@@ -439,23 +439,23 @@ const float* NewDequantMatrices() {
       int k = kNaturalCoeffOrder[k_zz];
       float idct_scale = kIDCTScales[k % 8] * kIDCTScales[k / 8] / 64.0f;
       double weight = GetQuantWeights()[id * 192 + idx];
+      if (weight < 0.02) {
+        weight = 0.02;
+      }
       table[id * 192 + c * 64 + k] = idct_scale / weight;
     }
   }
   return table;
 }
 
+// Returns aligned memory.
 const float* DequantMatrix(int id) {
   static const float* const kDequantMatrix = NewDequantMatrices();
   return &kDequantMatrix[id * 192];
 }
 
-int ClampVal(int val) {
-  return std::min(kQuantMax, std::max(1, val));
-}
-
 ImageD ComputeBlockDistanceQForm(const double lambda,
-                                 const float* const PIK_RESTRICT scales) {
+                                 const float* PIK_RESTRICT scales) {
   ImageD A = Identity<double>(64);
   for (int ky = 0, k = 0; ky < 8; ++ky) {
     for (int kx = 0; kx < 8; ++kx, ++k) {
@@ -486,105 +486,44 @@ ImageD ComputeBlockDistanceQForm(const double lambda,
   return A;
 }
 
-Quantizer::Quantizer(int template_id, int quant_xsize, int quant_ysize) :
-    template_id_(template_id),
-    quant_xsize_(quant_xsize),
-    quant_ysize_(quant_ysize),
-    global_scale_(kGlobalScaleDenom / kDefaultQuant),
-    quant_patch_(kDefaultQuant),
-    quant_dc_(kDefaultQuant),
-    quant_img_ac_(quant_xsize_, quant_ysize_, kDefaultQuant),
-    initialized_(false) {
+Quantizer::Quantizer(int template_id, int quant_xsize, int quant_ysize)
+    : quant_xsize_(quant_xsize),
+      quant_ysize_(quant_ysize),
+      template_id_(template_id),
+      global_scale_(kGlobalScaleDenom / kDefaultQuant),
+      quant_patch_(kDefaultQuant),
+      quant_dc_(kDefaultQuant),
+      quant_img_ac_(quant_xsize_, quant_ysize_),
+      initialized_(false) {
+  FillImage(kDefaultQuant, &quant_img_ac_);
+  if (template_id == kQuantHQ) {
+    memcpy(zero_bias_, kZeroBiasHQ, sizeof(kZeroBiasHQ));
+  } else {
+    memcpy(zero_bias_, kZeroBiasDefault, sizeof(kZeroBiasDefault));
+  }
 }
 
 const float* Quantizer::DequantMatrix() const {
   return pik::DequantMatrix(template_id_);
 }
 
-bool Quantizer::SetQuantField(const float quant_dc, const ImageF& qf,
-                              const CompressParams& cparams) {
-  bool changed = false;
-  int new_global_scale = 4096 * quant_dc;
-  if (new_global_scale != global_scale_) {
-    global_scale_ = new_global_scale;
-    changed = true;
-  }
-  const float scale = Scale();
-  const float inv_scale = 1.0f / scale;
-  int val = ClampVal(quant_dc * inv_scale + 0.5f);
-  if (val != quant_dc_) {
-    quant_dc_ = val;
-    changed = true;
-  }
-  for (int y = 0; y < quant_ysize_; ++y) {
-    for (int x = 0; x < quant_xsize_; ++x) {
-      int val = ClampVal(qf.Row(y)[x] * inv_scale + 0.5f);
-      if (val != quant_img_ac_.Row(y)[x]) {
-        quant_img_ac_.Row(y)[x] = val;
-        changed = true;
-      }
-    }
-  }
-  if (!initialized_) {
-    changed = true;
-  }
-  if (changed) {
-    const float* const PIK_RESTRICT kDequantMatrix = DequantMatrix();
-    std::vector<float> quant_matrix(192);
-    for (int i = 0; i < quant_matrix.size(); ++i) {
-      quant_matrix[i] = 1.0f / kDequantMatrix[i];
-    }
-    const float qdc = scale * quant_dc_;
-    for (int y = 0; y < quant_ysize_; ++y) {
-      auto row_q = quant_img_ac_.Row(y);
-      for (int x = 0; x < quant_xsize_; ++x) {
-        const float qac = scale * row_q[x];
-        const Key key = QuantizerKey(x, y);
-        for (int c = 0; c < 3; ++c) {
-          if (bq_[c].Find(key) == nullptr) {
-            const float* const PIK_RESTRICT qm = &quant_matrix[c * 64];
-            BlockQuantizer* bq = bq_[c].Add(key);
-            bq->scales[0] = qdc * qm[0];
-            for (int k = 1; k < 64; ++k) {
-              bq->scales[k] = qac * qm[k];
-            }
-          }
-        }
-      }
-    }
-    inv_global_scale_ = 1.0f / scale;
-    inv_quant_dc_ = 1.0f / qdc;
-    inv_quant_patch_ = inv_global_scale_ / quant_patch_;
-    initialized_ = true;
-  }
-  return changed;
-}
-
 void Quantizer::GetQuantField(float* quant_dc, ImageF* qf) {
   const float scale = Scale();
   *quant_dc = scale * quant_dc_;
   *qf = ImageF(quant_xsize_, quant_ysize_);
-  for (int y = 0; y < quant_ysize_; ++y) {
-    for (int x = 0; x < quant_xsize_; ++x) {
+  for (size_t y = 0; y < quant_ysize_; ++y) {
+    for (size_t x = 0; x < quant_xsize_; ++x) {
       qf->Row(y)[x] = scale * quant_img_ac_.Row(y)[x];
     }
   }
 }
 
 std::string Quantizer::Encode(PikImageSizeInfo* info) const {
-  EncodedIntPlane encoded_plane = EncodePlane(
-      quant_img_ac_, 1, kQuantMax, kSupertileInBlocks, 1, nullptr, info);
   std::stringstream ss;
   ss << std::string(1, (global_scale_ - 1) >> 8);
   ss << std::string(1, (global_scale_ - 1) & 0xff);
   ss << std::string(1, quant_patch_ - 1);
   ss << std::string(1, quant_dc_ - 1);
-  ss << encoded_plane.preamble;
-  for (int y = 0; y < encoded_plane.tiles.size(); y++) {
-    for (int x = 0; x < encoded_plane.tiles[0].size(); x++) {
-      ss << encoded_plane.tiles[y][x];
-    }
-  }
   if (info) {
     info->total_size += 4;
   }
@@ -596,27 +535,6 @@ bool Quantizer::Decode(BitReader* br) {
   global_scale_ += br->ReadBits(8) + 1;
   quant_patch_ = br->ReadBits(8) + 1;
   quant_dc_ = br->ReadBits(8) + 1;
-  IntPlaneDecoder decoder(1, kQuantMax, kSupertileInBlocks, 1);
-  if (!decoder.LoadPreamble(br)) {
-    return false;
-  }
-  size_t tile_ysize =
-      (quant_img_ac_.ysize() + kSupertileInBlocks - 1) / kSupertileInBlocks;
-  size_t tile_xsize =
-      (quant_img_ac_.xsize() + kSupertileInBlocks - 1) / kSupertileInBlocks;
-  for (int y = 0; y < tile_ysize; y++) {
-    for (int x = 0; x < tile_xsize; x++) {
-      Image<int> tile =
-          Window(&quant_img_ac_, x * kSupertileInBlocks, y * kSupertileInBlocks,
-                 std::min<int>(kSupertileInBlocks,
-                               quant_img_ac_.xsize() - kSupertileInBlocks * x),
-                 std::min<int>(kSupertileInBlocks,
-                               quant_img_ac_.ysize() - kSupertileInBlocks * y));
-      if (!decoder.DecodeTile(br, &tile, nullptr)) {
-        return false;
-      }
-    }
-  }
   inv_global_scale_ = kGlobalScaleDenom * 1.0 / global_scale_;
   inv_quant_dc_ = inv_global_scale_ / quant_dc_;
   inv_quant_patch_ = inv_global_scale_ / quant_patch_;
@@ -646,8 +564,8 @@ Image3S QuantizeCoeffs(const Image3F& in, const Quantizer& quantizer) {
       const float* PIK_RESTRICT row_in = in.PlaneRow(c, block_y);
       int16_t* PIK_RESTRICT row_out = out.PlaneRow(c, block_y);
       for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
-        const float* const PIK_RESTRICT block_in = &row_in[block_x * 64];
-        int16_t* const PIK_RESTRICT block_out = &row_out[block_x * 64];
+        const float* PIK_RESTRICT block_in = &row_in[block_x * 64];
+        int16_t* PIK_RESTRICT block_out = &row_out[block_x * 64];
         quantizer.QuantizeBlock(block_x, block_y, c, block_in, block_out);
       }
     }
@@ -655,17 +573,17 @@ Image3S QuantizeCoeffs(const Image3F& in, const Quantizer& quantizer) {
   return out;
 }
 
-// TODO(janwas): input is 1x64 or DC-only?
+// Returns DC only; "in" is 1x64 blocks.
 Image3S QuantizeCoeffsDC(const Image3F& in, const Quantizer& quantizer) {
   const size_t block_xsize = in.xsize() / 64;
   const size_t block_ysize = in.ysize();
-  Image3S out(block_xsize * 64, block_ysize);
+  Image3S out(block_xsize, block_ysize);
   for (int c = 0; c < 3; ++c) {
     for (size_t block_y = 0; block_y < block_ysize; ++block_y) {
       const float* PIK_RESTRICT row_in = in.PlaneRow(c, block_y);
       int16_t* PIK_RESTRICT row_out = out.PlaneRow(c, block_y);
       for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
-        const float* const PIK_RESTRICT block_in = &row_in[block_x * 64];
+        const float* PIK_RESTRICT block_in = &row_in[block_x * 64];
         row_out[block_x] =
             quantizer.QuantizeBlockDC(block_x, block_y, c, block_in);
       }
@@ -682,16 +600,20 @@ Image3F DequantizeCoeffs(const Image3S& in, const Quantizer& quantizer) {
   Image3F out(block_xsize * 64, block_ysize);
   const float inv_quant_dc = quantizer.inv_quant_dc();
   const float* PIK_RESTRICT kDequantMatrix = quantizer.DequantMatrix();
+  const int16_t* all_block_in[3];
+  float* all_block_out[3];
   for (int by = 0; by < block_ysize; ++by) {
-    auto row_in = in.Row(by);
-    auto row_out = out.Row(by);
+    for (int c = 0; c < 3; ++c) {
+      all_block_in[c] = in.PlaneRow(c, by);
+      all_block_out[c] = out.PlaneRow(c, by);
+    }
     for (int bx = 0; bx < block_xsize; ++bx) {
-      const int offset = bx * 64;
       const float inv_quant_ac = quantizer.inv_quant_ac(bx, by);
+      const int offset = bx * 64;
       for (int c = 0; c < 3; ++c) {
-        const int16_t* const PIK_RESTRICT block_in = &row_in[c][offset];
-        const float* const PIK_RESTRICT muls = &kDequantMatrix[c * 64];
-        float* const PIK_RESTRICT block_out = &row_out[c][offset];
+        const int16_t* PIK_RESTRICT block_in = all_block_in[c] + offset;
+        const float* PIK_RESTRICT muls = &kDequantMatrix[c * 64];
+        float* PIK_RESTRICT block_out = all_block_out[c] + offset;
         for (int k = 0; k < 64; ++k) {
           block_out[k] = block_in[k] * (muls[k] * inv_quant_ac);
         }
@@ -702,20 +624,22 @@ Image3F DequantizeCoeffs(const Image3S& in, const Quantizer& quantizer) {
   return out;
 }
 
-ImageF QuantizeRoundtrip(const Quantizer& quantizer, int c, const ImageF& img) {
-  const size_t block_xsize = img.xsize() / 64;
-  const size_t block_ysize = img.ysize();
+ImageF QuantizeRoundtrip(const Quantizer& quantizer, int c,
+                         const ImageF& coeffs) {
+  const size_t block_xsize = coeffs.xsize() / 64;
+  const size_t block_ysize = coeffs.ysize();
+  ImageF out(coeffs.xsize(), coeffs.ysize());
+
   const float inv_quant_dc = quantizer.inv_quant_dc();
-  const float* const PIK_RESTRICT kDequantMatrix =
-      &quantizer.DequantMatrix()[c * 64];
-  ImageF out(img.xsize(), img.ysize());
+  const float* PIK_RESTRICT kDequantMatrix = &quantizer.DequantMatrix()[c * 64];
+
   for (size_t block_y = 0; block_y < block_ysize; ++block_y) {
-    const float* const PIK_RESTRICT row_in = img.ConstRow(block_y);
-    float* const PIK_RESTRICT row_out = out.Row(block_y);
+    const float* PIK_RESTRICT row_in = coeffs.ConstRow(block_y);
+    float* PIK_RESTRICT row_out = out.Row(block_y);
     for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
       const float inv_quant_ac = quantizer.inv_quant_ac(block_x, block_y);
-      const float* const PIK_RESTRICT block_in = &row_in[block_x * 64];
-      float* const PIK_RESTRICT block_out = &row_out[block_x * 64];
+      const float* PIK_RESTRICT block_in = &row_in[block_x * 64];
+      float* PIK_RESTRICT block_out = &row_out[block_x * 64];
       int16_t qblock[64];
       quantizer.QuantizeBlock(block_x, block_y, c, block_in, qblock);
       block_out[0] = qblock[0] * (kDequantMatrix[0] * inv_quant_dc);
@@ -727,20 +651,45 @@ ImageF QuantizeRoundtrip(const Quantizer& quantizer, int c, const ImageF& img) {
   return out;
 }
 
-ImageF QuantizeRoundtripDC(const Quantizer& quantizer, int c,
-                           const ImageF& img) {
+ImageF QuantizeRoundtripExtract189(const Quantizer& quantizer, int c,
+                                   const ImageF& coeffs) {
+  const size_t block_xsize = coeffs.xsize() / 64;
+  const size_t block_ysize = coeffs.ysize();
+  ImageF out(4 * block_xsize, block_ysize);
+
+  const float* PIK_RESTRICT kDequantMatrix = &quantizer.DequantMatrix()[c * 64];
+
+  for (size_t block_y = 0; block_y < block_ysize; ++block_y) {
+    const float* PIK_RESTRICT row_in = coeffs.ConstRow(block_y);
+    float* PIK_RESTRICT row_out = out.Row(block_y);
+    for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
+      const float inv_quant_ac = quantizer.inv_quant_ac(block_x, block_y);
+      const float* PIK_RESTRICT block_in = &row_in[block_x * 64];
+      float* PIK_RESTRICT block_out = &row_out[block_x * 4];
+      int16_t qblock[64];
+      quantizer.QuantizeBlock2x2(block_x, block_y, c, block_in, qblock);
+      block_out[1] = qblock[1] * (kDequantMatrix[1] * inv_quant_ac);
+      block_out[2] = qblock[8] * (kDequantMatrix[8] * inv_quant_ac);
+      block_out[3] = qblock[9] * (kDequantMatrix[9] * inv_quant_ac);
+    }
+  }
+  return out;
+}
+
+ImageF QuantizeRoundtripExtractDC(const Quantizer& quantizer, int c,
+                                  const ImageF& coeffs) {
   // All coordinates are blocks.
-  const int block_xsize = img.xsize() / 64;
-  const int block_ysize = img.ysize();
+  const int block_xsize = coeffs.xsize() / 64;
+  const int block_ysize = coeffs.ysize();
   ImageF out(block_xsize, block_ysize);
 
   const float mul =
       quantizer.DequantMatrix()[c * 64] * quantizer.inv_quant_dc();
   for (size_t block_y = 0; block_y < block_ysize; ++block_y) {
-    const float* const PIK_RESTRICT row_in = img.ConstRow(block_y);
-    float* const PIK_RESTRICT row_out = out.Row(block_y);
+    const float* PIK_RESTRICT row_in = coeffs.ConstRow(block_y);
+    float* PIK_RESTRICT row_out = out.Row(block_y);
     for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
-      const float* const PIK_RESTRICT block_in = &row_in[block_x * 64];
+      const float* PIK_RESTRICT block_in = &row_in[block_x * 64];
       row_out[block_x] =
           quantizer.QuantizeBlockDC(block_x, block_y, c, block_in) * mul;
     }
@@ -748,100 +697,51 @@ ImageF QuantizeRoundtripDC(const Quantizer& quantizer, int c,
   return out;
 }
 
-Image3F QuantizeRoundtrip(const Quantizer& quantizer, const Image3F& img) {
-  return Image3F(QuantizeRoundtrip(quantizer, 0, img.plane(0)),
-                 QuantizeRoundtrip(quantizer, 1, img.plane(1)),
-                 QuantizeRoundtrip(quantizer, 2, img.plane(2)));
-}
+ImageF QuantizeRoundtripDC(const Quantizer& quantizer, int c,
+                           const ImageF& dc) {
+  // All coordinates are blocks.
+  const int block_xsize = dc.xsize();
+  const int block_ysize = dc.ysize();
+  ImageF out(block_xsize, block_ysize);
 
-Image3F QuantizeRoundtripDC(const Quantizer& quantizer, const Image3F& img) {
-  return Image3F(QuantizeRoundtripDC(quantizer, 0, img.plane(0)),
-                 QuantizeRoundtripDC(quantizer, 1, img.plane(1)),
-                 QuantizeRoundtripDC(quantizer, 2, img.plane(2)));
-}
-
-PIK_INLINE void DequantizeCoeffsT(const ConstImageViewF* in,
-                                  const ConstImageViewF& in_quant_ac,
-                                  const Quantizer& quantizer,
-                                  const OutputRegion& output_region,
-                                  const MutableImageViewF* PIK_RESTRICT out) {
-  PROFILER_ZONE("|| Dequant");
-  const size_t xsize = output_region.xsize;
-  PIK_CHECK(xsize % 64 == 0);
-  const size_t ysize = output_region.ysize;
-  const float inv_quant_dc = quantizer.inv_quant_dc();
-  const float inv_global_scale = quantizer.InvGlobalScale();
-  const float* PIK_RESTRICT kDequantMatrix = quantizer.DequantMatrix();
-
-  for (int c = 0; c < 3; ++c) {
-    const float* const PIK_RESTRICT muls = &kDequantMatrix[c * 64];
-
-    for (size_t by = 0; by < ysize; ++by) {
-      const int16_t* PIK_RESTRICT row_in =
-          reinterpret_cast<const int16_t*>(in[c].ConstRow(by));
-      const int* PIK_RESTRICT row_quant_ac =
-          reinterpret_cast<const int*>(in_quant_ac.ConstRow(by));
-      float* PIK_RESTRICT row_out = out[c].Row(by);
-
-      for (size_t bx = 0; bx < xsize; bx += 64) {
-        const float inv_quant_ac =
-            row_quant_ac[bx / 64] == 0
-                ? 1E10
-                : inv_global_scale / row_quant_ac[bx / 64];
-
-        // Produce one whole block
-        for (int k = 0; k < 64; ++k) {
-          row_out[bx + k] = row_in[bx + k] * (muls[k] * inv_quant_ac);
-        }
-        row_out[bx + 0] = row_in[bx + 0] * (muls[0] * inv_quant_dc);
-      }
+  const float mul =
+      quantizer.DequantMatrix()[c * 64] * quantizer.inv_quant_dc();
+  for (size_t block_y = 0; block_y < block_ysize; ++block_y) {
+    const float* PIK_RESTRICT row_in = dc.ConstRow(block_y);
+    float* PIK_RESTRICT row_out = out.Row(block_y);
+    for (size_t block_x = 0; block_x < block_xsize; ++block_x) {
+      const float* PIK_RESTRICT block_in = row_in + block_x;
+      row_out[block_x] =
+          quantizer.QuantizeBlockDC(block_x, block_y, c, block_in) * mul;
     }
   }
+  return out;
 }
 
-PIK_INLINE void DequantizeCoeffsDC(const ConstImageViewF* in,
-                                   const Quantizer& quantizer,
-                                   const OutputRegion& output_region,
-                                   const MutableImageViewF* PIK_RESTRICT out) {
-  PROFILER_ZONE("|| DequantDC");
-  const float* PIK_RESTRICT kDequantMatrix = quantizer.DequantMatrix();
-
-  for (int c = 0; c < 3; ++c) {
-    const float mul_dc = kDequantMatrix[c * 64] * quantizer.inv_quant_dc();
-
-    for (size_t y = 0; y < output_region.ysize; ++y) {
-      const int16_t* PIK_RESTRICT row_in =
-          reinterpret_cast<const int16_t*>(in[c].ConstRow(y));
-      float* PIK_RESTRICT row_out = out[c].Row(y);
-
-      for (size_t x = 0; x < output_region.xsize; ++x) {
-        row_out[x] = row_in[x * 64] * mul_dc;
-      }
-    }
-  }
+Image3F QuantizeRoundtrip(const Quantizer& quantizer, const Image3F& coeffs) {
+  return Image3F(QuantizeRoundtrip(quantizer, 0, coeffs.Plane(0)),
+                 QuantizeRoundtrip(quantizer, 1, coeffs.Plane(1)),
+                 QuantizeRoundtrip(quantizer, 2, coeffs.Plane(2)));
 }
 
-TFNode* AddDequantize(const TFPorts in_xyb, const TFPorts in_quant_ac,
-                      const Quantizer& quantizer, TFBuilder* builder) {
-  PIK_CHECK(OutType(in_xyb.node) == TFType::kI16);
-  PIK_CHECK(OutType(in_quant_ac.node) == TFType::kI32);
-  return builder->AddClosure(
-      "dequantize", Borders(), Scale(), {in_xyb, in_quant_ac}, 3, TFType::kF32,
-      [&quantizer](const ConstImageViewF* in, const OutputRegion& output_region,
-                   const MutableImageViewF* PIK_RESTRICT out) {
-        DequantizeCoeffsT(in, in[3], quantizer, output_region, out);
-      });
+Image3F QuantizeRoundtripExtract189(const Quantizer& quantizer,
+                                    const Image3F& coeffs) {
+  return Image3F(QuantizeRoundtripExtract189(quantizer, 0, coeffs.Plane(0)),
+                 QuantizeRoundtripExtract189(quantizer, 1, coeffs.Plane(1)),
+                 QuantizeRoundtripExtract189(quantizer, 2, coeffs.Plane(2)));
 }
 
-TFNode* AddDequantizeDC(const TFPorts in_xyb, const Quantizer& quantizer,
-                        TFBuilder* builder) {
-  PIK_CHECK(OutType(in_xyb.node) == TFType::kI16);
-  return builder->AddClosure(
-      "dequantize", Borders(), Scale(), {in_xyb}, 3, TFType::kF32,
-      [&quantizer](const ConstImageViewF* in, const OutputRegion& output_region,
-                   const MutableImageViewF* PIK_RESTRICT out) {
-        DequantizeCoeffsDC(in, quantizer, output_region, out);
-      });
+Image3F QuantizeRoundtripExtractDC(const Quantizer& quantizer,
+                                   const Image3F& coeffs) {
+  return Image3F(QuantizeRoundtripExtractDC(quantizer, 0, coeffs.Plane(0)),
+                 QuantizeRoundtripExtractDC(quantizer, 1, coeffs.Plane(1)),
+                 QuantizeRoundtripExtractDC(quantizer, 2, coeffs.Plane(2)));
+}
+
+Image3F QuantizeRoundtripDC(const Quantizer& quantizer, const Image3F& coeffs) {
+  return Image3F(QuantizeRoundtripDC(quantizer, 0, coeffs.Plane(0)),
+                 QuantizeRoundtripDC(quantizer, 1, coeffs.Plane(1)),
+                 QuantizeRoundtripDC(quantizer, 2, coeffs.Plane(2)));
 }
 
 }  // namespace pik

@@ -21,7 +21,38 @@ Image3F SlowDCT(const Image3F& img);
 
 // Returns an N x M image by taking the DC coefficient from each 64x1 block.
 // REQUIRES: coeffs.xsize() == 64*N, coeffs.ysize() == M
-Image3F DCImage(const Image3F& coeffs);
+template <typename T>
+Image3<T> DCImage(const Image3<T>& coeffs) {
+  PIK_ASSERT(coeffs.xsize() % 64 == 0);
+  Image3<T> out(coeffs.xsize() / 64, coeffs.ysize());
+  for (int c = 0; c < 3; ++c) {
+    for (size_t y = 0; y < out.ysize(); ++y) {
+      const T* PIK_RESTRICT row_in = coeffs.ConstPlaneRow(c, y);
+      T* PIK_RESTRICT row_out = out.PlaneRow(c, y);
+      for (size_t x = 0; x < out.xsize(); ++x) {
+        row_out[x] = row_in[x * 64];
+      }
+    }
+  }
+  return out;
+}
+
+// Scatters dc into "coeffs" at offset 0 within 1x64 blocks.
+template <typename T>
+void FillDC(const Image3<T>& dc, Image3<T>* coeffs) {
+  const size_t xsize = dc.xsize();
+  const size_t ysize = dc.ysize();
+
+  for (int c = 0; c < 3; c++) {
+    for (size_t y = 0; y < ysize; y++) {
+      const T* PIK_RESTRICT row_dc = dc.PlaneRow(c, y);
+      T* PIK_RESTRICT row_out = coeffs->PlaneRow(c, y);
+      for (size_t x = 0; x < xsize; ++x) {
+        row_out[64 * x] = row_dc[x];
+      }
+    }
+  }
+}
 
 // Zeroes out the top-left 2x2 corner of each DCT block.
 // REQUIRES: coeffs.xsize() == 64*N, coeffs.ysize() == M
@@ -33,7 +64,7 @@ Image3F KeepOnly2x2Corners(const Image3F& coeffs);
 //  2) perform TransposedScaledIDCT()
 //  3) subsample the result 4x4 by taking simple averages
 // REQUIRES: coeffs.xsize() == 64*N, coeffs.ysize() == M
-Image3F GetPixelSpaceImageFrom2x2Corners(const Image3F& coeffs);
+Image3F GetPixelSpaceImageFrom0189_64(const Image3F& coeffs);
 
 // Puts back the top 2x2 corner of each 8x8 block of *coeffs from the
 // transformed pixel space image img.
@@ -52,10 +83,10 @@ Image3F UpSample8x8BlurDCT(const Image3F& img, const float sigma);
 //  1) Upsample image 4x4 with nearest-neighbor
 //  2) Blur with a Gaussian kernel of radius 4 and given sigma
 //  3) perform TransposedScaledDCT()
-//  4) Zero out the top 2x2 corner of each DCT block, unless add_all is true
+//  4) Zero out the top 2x2 corner of each DCT block
 //  5) XOR with "sign" (decoder adds predictions, encoder would subtract)
 void UpSample4x4BlurDCT(const Image3F& img, const float sigma, const float sign,
-                        const bool add_all, ThreadPool* pool, Image3F* add_to);
+                        ThreadPool* pool, Image3F* add_to);
 
 // Returns an image that is defined by the following transformations:
 //  1) Upsample image 8x8 with nearest-neighbor

@@ -1,4 +1,4 @@
-#include "histogram.h"
+#include "ans_common.h"
 
 #include "status.h"
 

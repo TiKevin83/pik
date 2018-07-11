@@ -76,7 +76,7 @@ PIK_INLINE V AbsResidual(const V c, const V pred) {
 
 PIK_INLINE size_t IndexOfMinCost(const VIx8& abs_costs) {
   const DI d;
-  // Algorithm must exactly match minpus_epu16.
+  // Algorithm must exactly match minpos_epu16.
   size_t idx_pred = 0;
   int16_t min_cost = get_part(d, abs_costs.lanes[0]);
   for (size_t i = 0; i < kNumPredictors; ++i) {
@@ -144,13 +144,12 @@ class PixelNeighborsY {
   using PixelD = Part<int16_t, 1>;
   using PixelV = PixelD::V;
 
-  static PIK_INLINE PixelV LoadPixel(const DC* const PIK_RESTRICT row,
-                                     const size_t x) {
+  static PIK_INLINE PixelV Load(const DC* PIK_RESTRICT row, const size_t x) {
     return set_part(PixelD(), row[x]);
   }
 
-  static PIK_INLINE void StorePixel(const PixelV dc, DC* const PIK_RESTRICT row,
-                                    const size_t x) {
+  static PIK_INLINE void Store(const PixelV dc, DC* PIK_RESTRICT row,
+                               const size_t x) {
     row[x] = get_part(PixelD(), dc);
   }
 
@@ -160,11 +159,9 @@ class PixelNeighborsY {
 
   // Loads the neighborhood required for predicting at x = 2. This involves
   // top/middle/bottom rows; if y = 1, row_t == row_m == Row(0).
-  PixelNeighborsY(const DC* const PIK_RESTRICT row_ym,
-                  const DC* const PIK_RESTRICT row_yb,
-                  const DC* const PIK_RESTRICT row_t,
-                  const DC* const PIK_RESTRICT row_m,
-                  const DC* const PIK_RESTRICT row_b) {
+  PixelNeighborsY(const DC* PIK_RESTRICT row_ym, const DC* PIK_RESTRICT row_yb,
+                  const DC* PIK_RESTRICT row_t, const DC* PIK_RESTRICT row_m,
+                  const DC* PIK_RESTRICT row_b) {
     const DI d;
     const auto wl = set1(d, row_m[0]);
     const auto ww = set1(d, row_b[0]);
@@ -177,12 +174,11 @@ class PixelNeighborsY {
   }
 
   // Estimates "cost" for each predictor by comparing with known n and w.
-  PIK_INLINE void PredictorCosts(const size_t x,
-                                 const DC* const PIK_RESTRICT row_ym,
-                                 const DC* const PIK_RESTRICT row_yb,
-                                 const DC* const PIK_RESTRICT row_t,
+  PIK_INLINE void PredictorCosts(const size_t x, const DC* PIK_RESTRICT row_ym,
+                                 const DC* PIK_RESTRICT row_yb,
+                                 const DC* PIK_RESTRICT row_t,
                                  VIx8* PIK_RESTRICT costs) {
-    const auto tr = Broadcast(LoadPixel(row_t, x + 1));
+    const auto tr = Broadcast(Load(row_t, x + 1));
     VIx8 pred_n;
     Predict(tn_, l_, tl_, tr, &pred_n);
 #if SIMD_TARGET_VALUE == SIMD_NONE
@@ -257,7 +253,7 @@ class PixelNeighborsY {
 // Providing separate sets of predictors for the luminance and chrominance bands
 // reduces the magnitude of residuals, but differentiating between the
 // chrominance bands does not.
-class PixelNeighborsUV {
+class PixelNeighborsXB {
  public:
 #if SIMD_TARGET_VALUE != SIMD_NONE
   using PixelD = Part<int16_t, 2>;
@@ -265,8 +261,7 @@ class PixelNeighborsUV {
   using PixelV = VIx2;
 
   // U in lane1, V in lane0.
-  static PIK_INLINE PixelV LoadPixel(const DC* const PIK_RESTRICT row,
-                                     const size_t x) {
+  static PIK_INLINE PixelV Load(const DC* PIK_RESTRICT row, const size_t x) {
 #if SIMD_TARGET_VALUE == SIMD_NONE
     PixelV ret;
     ret.lanes[0] = load(DI(), row + 2 * x + 0);  // V
@@ -277,35 +272,32 @@ class PixelNeighborsUV {
 #endif
   }
 
-  static PIK_INLINE void StorePixel(const PixelV uv, DC* const PIK_RESTRICT row,
-                                    const size_t x) {
+  static PIK_INLINE void Store(const PixelV xb, DC* PIK_RESTRICT row,
+                               const size_t x) {
 #if SIMD_TARGET_VALUE == SIMD_NONE
-    store(uv.lanes[0], DI(), row + 2 * x + 0);  // V
-    store(uv.lanes[1], DI(), row + 2 * x + 1);  // U
+    store(xb.lanes[0], DI(), row + 2 * x + 0);  // B
+    store(xb.lanes[1], DI(), row + 2 * x + 1);  // X
 #else
-    store(uv, PixelD(), row + 2 * x);
+    store(xb, PixelD(), row + 2 * x);
 #endif
   }
 
-  PixelNeighborsUV(const DC* const PIK_RESTRICT row_ym,
-                   const DC* const PIK_RESTRICT row_yb,
-                   const DC* const PIK_RESTRICT row_t,
-                   const DC* const PIK_RESTRICT row_m,
-                   const DC* const PIK_RESTRICT row_b) {
+  PixelNeighborsXB(const DC* PIK_RESTRICT row_ym, const DC* PIK_RESTRICT row_yb,
+                   const DC* PIK_RESTRICT row_t, const DC* PIK_RESTRICT row_m,
+                   const DC* PIK_RESTRICT row_b) {
     const DI d;
     yn_ = set1(d, row_ym[2]);
     yw_ = set1(d, row_yb[1]);
     yl_ = set1(d, row_ym[1]);
-    n_ = LoadPixel(row_m, 2);
-    w_ = LoadPixel(row_b, 1);
-    l_ = LoadPixel(row_m, 1);
+    n_ = Load(row_m, 2);
+    w_ = Load(row_b, 1);
+    l_ = Load(row_m, 1);
   }
 
   // Estimates "cost" for each predictor by comparing with known c from Y band.
-  PIK_INLINE void PredictorCosts(const size_t x,
-                                 const DC* const PIK_RESTRICT row_ym,
-                                 const DC* const PIK_RESTRICT row_yb,
-                                 const DC* const PIK_RESTRICT,
+  PIK_INLINE void PredictorCosts(const size_t x, const DC* PIK_RESTRICT row_ym,
+                                 const DC* PIK_RESTRICT row_yb,
+                                 const DC* PIK_RESTRICT,
                                  VIx8* PIK_RESTRICT costs) {
     const auto yr = set1(DI(), row_ym[x + 1]);
     const auto yc = set1(DI(), row_yb[x]);
@@ -326,8 +318,8 @@ class PixelNeighborsUV {
   // Returns predictor for pixel c with min cost.
   PIK_INLINE PixelV PredictC(const PixelV r, const VIx8& costs) const {
     VIx8 u, v;
-    Predict(BroadcastU(n_), BroadcastU(w_), BroadcastU(l_), BroadcastU(r), &u);
-    Predict(BroadcastV(n_), BroadcastV(w_), BroadcastV(l_), BroadcastV(r), &v);
+    Predict(BroadcastX(n_), BroadcastX(w_), BroadcastX(l_), BroadcastX(r), &u);
+    Predict(BroadcastB(n_), BroadcastB(w_), BroadcastB(l_), BroadcastB(r), &v);
 
 #if SIMD_TARGET_VALUE == SIMD_NONE
     const size_t idx_pred = IndexOfMinCost(costs);
@@ -350,18 +342,18 @@ class PixelNeighborsUV {
   }
 
  private:
-  static PIK_INLINE DI::V BroadcastU(const PixelV uv) {
+  static PIK_INLINE DI::V BroadcastX(const PixelV xb) {
 #if SIMD_TARGET_VALUE == SIMD_NONE
-    return uv.lanes[1];
+    return xb.lanes[1];
 #else
-    return broadcast_part<1>(DI(), uv);
+    return broadcast_part<1>(DI(), xb);
 #endif
   }
-  static PIK_INLINE DI::V BroadcastV(const PixelV uv) {
+  static PIK_INLINE DI::V BroadcastB(const PixelV xb) {
 #if SIMD_TARGET_VALUE == SIMD_NONE
-    return uv.lanes[0];
+    return xb.lanes[0];
 #else
-    return broadcast_part<0>(DI(), uv);
+    return broadcast_part<0>(DI(), xb);
 #endif
   }
 
@@ -406,23 +398,20 @@ class PixelNeighborsUV {
 // Useful for Row(0) because no preceding row is required.
 template <class N>
 struct FixedW {
-  static PIK_INLINE void Shrink(const size_t xsize,
-                                const DC* const PIK_RESTRICT dc,
-                                DC* const PIK_RESTRICT residuals) {
-    N::StorePixel(N::LoadPixel(dc, 0), residuals, 0);
+  static PIK_INLINE void Shrink(const size_t xsize, const DC* PIK_RESTRICT dc,
+                                DC* PIK_RESTRICT residuals) {
+    N::Store(N::Load(dc, 0), residuals, 0);
     for (size_t x = 1; x < xsize; ++x) {
-      N::StorePixel(N::LoadPixel(dc, x) - N::LoadPixel(dc, x - 1), residuals,
-                    x);
+      N::Store(N::Load(dc, x) - N::Load(dc, x - 1), residuals, x);
     }
   }
 
   static PIK_INLINE void Expand(const size_t xsize,
-                                const DC* const PIK_RESTRICT residuals,
-                                DC* const PIK_RESTRICT dc) {
-    N::StorePixel(N::LoadPixel(residuals, 0), dc, 0);
+                                const DC* PIK_RESTRICT residuals,
+                                DC* PIK_RESTRICT dc) {
+    N::Store(N::Load(residuals, 0), dc, 0);
     for (size_t x = 1; x < xsize; ++x) {
-      N::StorePixel(N::LoadPixel(dc, x - 1) + N::LoadPixel(residuals, x), dc,
-                    x);
+      N::Store(N::Load(dc, x - 1) + N::Load(residuals, x), dc, x);
     }
   }
 };
@@ -432,27 +421,23 @@ struct FixedW {
 template <class N>
 struct LeftBorder2 {
   static PIK_INLINE void Shrink(const size_t xsize,
-                                const DC* const PIK_RESTRICT row_m,
-                                const DC* const PIK_RESTRICT row_b,
-                                DC* const PIK_RESTRICT residuals) {
-    N::StorePixel(N::LoadPixel(row_b, 0) - N::LoadPixel(row_m, 0), residuals,
-                  0);
+                                const DC* PIK_RESTRICT row_m,
+                                const DC* PIK_RESTRICT row_b,
+                                DC* PIK_RESTRICT residuals) {
+    N::Store(N::Load(row_b, 0) - N::Load(row_m, 0), residuals, 0);
     if (xsize >= 2) {
       // TODO(user): Clamped gradient should be slightly better here.
-      N::StorePixel(N::LoadPixel(row_b, 1) - N::LoadPixel(row_b, 0), residuals,
-                    1);
+      N::Store(N::Load(row_b, 1) - N::Load(row_b, 0), residuals, 1);
     }
   }
 
   static PIK_INLINE void Expand(const size_t xsize,
-                                const DC* const PIK_RESTRICT residuals,
-                                const DC* const PIK_RESTRICT row_m,
-                                DC* const PIK_RESTRICT row_b) {
-    N::StorePixel(N::LoadPixel(row_m, 0) + N::LoadPixel(residuals, 0), row_b,
-                  0);
+                                const DC* PIK_RESTRICT residuals,
+                                const DC* PIK_RESTRICT row_m,
+                                DC* PIK_RESTRICT row_b) {
+    N::Store(N::Load(row_m, 0) + N::Load(residuals, 0), row_b, 0);
     if (xsize >= 2) {
-      N::StorePixel(N::LoadPixel(row_b, 0) + N::LoadPixel(residuals, 1), row_b,
-                    1);
+      N::Store(N::Load(row_b, 0) + N::Load(residuals, 1), row_b, 1);
     }
   }
 };
@@ -460,24 +445,21 @@ struct LeftBorder2 {
 // Predicts the final x with w, necessary because PixelNeighbors* require "r".
 template <class N>
 struct RightBorder1 {
-  static PIK_INLINE void Shrink(const size_t xsize,
-                                const DC* const PIK_RESTRICT dc,
-                                DC* const PIK_RESTRICT residuals) {
+  static PIK_INLINE void Shrink(const size_t xsize, const DC* PIK_RESTRICT dc,
+                                DC* PIK_RESTRICT residuals) {
     // TODO(user): Clamped gradient should be slightly better here.
     if (xsize >= 2) {
-      const auto res =
-          N::LoadPixel(dc, xsize - 1) - N::LoadPixel(dc, xsize - 2);
-      N::StorePixel(res, residuals, xsize - 1);
+      const auto res = N::Load(dc, xsize - 1) - N::Load(dc, xsize - 2);
+      N::Store(res, residuals, xsize - 1);
     }
   }
 
   static PIK_INLINE void Expand(const size_t xsize,
-                                const DC* const PIK_RESTRICT residuals,
-                                DC* const PIK_RESTRICT dc) {
+                                const DC* PIK_RESTRICT residuals,
+                                DC* PIK_RESTRICT dc) {
     if (xsize >= 2) {
-      const auto uv =
-          N::LoadPixel(dc, xsize - 2) + N::LoadPixel(residuals, xsize - 1);
-      N::StorePixel(uv, dc, xsize - 1);
+      const auto xb = N::Load(dc, xsize - 2) + N::Load(residuals, xsize - 1);
+      N::Store(xb, dc, xsize - 1);
     }
   }
 };
@@ -490,36 +472,33 @@ class Adaptive {
   using PixelV = typename N::PixelV;
 
  public:
-  static void Shrink(const size_t xsize, const DC* const PIK_RESTRICT row_ym,
-                     const DC* const PIK_RESTRICT row_yb,
-                     const DC* const PIK_RESTRICT row_t,
-                     const DC* const PIK_RESTRICT row_m,
-                     const DC* const PIK_RESTRICT row_b,
-                     DC* const PIK_RESTRICT residuals) {
+  static void Shrink(const size_t xsize, const DC* PIK_RESTRICT row_ym,
+                     const DC* PIK_RESTRICT row_yb,
+                     const DC* PIK_RESTRICT row_t, const DC* PIK_RESTRICT row_m,
+                     const DC* PIK_RESTRICT row_b, DC* PIK_RESTRICT residuals) {
     LeftBorder2<N>::Shrink(xsize, row_m, row_b, residuals);
 
     ForeachPrediction(xsize, row_ym, row_yb, row_t, row_m, row_b,
                       [row_b, residuals](const size_t x, const PixelV pred) {
-                        const auto c = N::LoadPixel(row_b, x);
-                        N::StorePixel(c - pred, residuals, x);
+                        const auto c = N::Load(row_b, x);
+                        N::Store(c - pred, residuals, x);
                         return c;
                       });
 
     RightBorder1<N>::Shrink(xsize, row_b, residuals);
   }
 
-  static void Expand(const size_t xsize, const DC* const PIK_RESTRICT row_ym,
-                     const DC* const PIK_RESTRICT row_yb,
-                     const DC* const PIK_RESTRICT residuals,
-                     const DC* const PIK_RESTRICT row_t,
-                     const DC* const PIK_RESTRICT row_m,
-                     DC* const PIK_RESTRICT row_b) {
+  static void Expand(const size_t xsize, const DC* PIK_RESTRICT row_ym,
+                     const DC* PIK_RESTRICT row_yb,
+                     const DC* PIK_RESTRICT residuals,
+                     const DC* PIK_RESTRICT row_t, const DC* PIK_RESTRICT row_m,
+                     DC* PIK_RESTRICT row_b) {
     LeftBorder2<N>::Expand(xsize, residuals, row_m, row_b);
 
     ForeachPrediction(xsize, row_ym, row_yb, row_t, row_m, row_b,
                       [row_b, residuals](const size_t x, const PixelV pred) {
-                        const auto c = pred + N::LoadPixel(residuals, x);
-                        N::StorePixel(c, row_b, x);
+                        const auto c = pred + N::Load(residuals, x);
+                        N::Store(c, row_b, x);
                         return c;
                       });
 
@@ -530,11 +509,11 @@ class Adaptive {
   // "Func" returns the current pixel, dc[x].
   template <class Func>
   static PIK_INLINE void ForeachPrediction(const size_t xsize,
-                                           const DC* const PIK_RESTRICT row_ym,
-                                           const DC* const PIK_RESTRICT row_yb,
-                                           const DC* const PIK_RESTRICT row_t,
-                                           const DC* const PIK_RESTRICT row_m,
-                                           const DC* const PIK_RESTRICT row_b,
+                                           const DC* PIK_RESTRICT row_ym,
+                                           const DC* PIK_RESTRICT row_yb,
+                                           const DC* PIK_RESTRICT row_t,
+                                           const DC* PIK_RESTRICT row_m,
+                                           const DC* PIK_RESTRICT row_b,
                                            const Func& func) {
     if (xsize < 2) {
       return;  // Avoid out of bounds reads.
@@ -542,7 +521,7 @@ class Adaptive {
     N neighbors(row_ym, row_yb, row_t, row_m, row_b);
     // PixelNeighborsY uses w at x - 1 => two pixel margin.
     for (size_t x = 2; x < xsize - 1; ++x) {
-      const auto r = N::LoadPixel(row_m, x + 1);
+      const auto r = N::Load(row_m, x + 1);
       VIx8 costs;
       neighbors.PredictorCosts(x, row_ym, row_yb, row_t, &costs);
       const auto pred_c = neighbors.PredictC(r, costs);
@@ -552,104 +531,129 @@ class Adaptive {
   }
 };
 
+void ShrinkY(const Rect& rect_in, const ImageS& in_y, const Rect& rect_res,
+             ImageS* PIK_RESTRICT residuals) {
+  const size_t xsize = rect_in.xsize();
+  const size_t ysize = rect_in.ysize();
+  PIK_ASSERT(SameSize(rect_in, rect_res));
 
-void ShrinkY(const Image<DC>& dc, Image<DC>* const PIK_RESTRICT residuals) {
-  const size_t xsize = dc.xsize();
-  const size_t ysize = dc.ysize();
-
-  FixedW<PixelNeighborsY>::Shrink(xsize, dc.Row(0), residuals->Row(0));
-
-  if (ysize >= 2) {
-    // Only one previous row, so row_t == row_m.
-    Adaptive<PixelNeighborsY>::Shrink(xsize, nullptr, nullptr, dc.Row(0),
-                                      dc.Row(0), dc.Row(1), residuals->Row(1));
-  }
-
-  for (size_t y = 2; y < ysize; ++y) {
-    Adaptive<PixelNeighborsY>::Shrink(xsize, nullptr, nullptr, dc.Row(y - 2),
-                                      dc.Row(y - 1), dc.Row(y),
-                                      residuals->Row(y));
-  }
-}
-
-void ShrinkUV(const Image<DC>& dc_y, const Image<DC>& dc,
-              Image<DC>* const PIK_RESTRICT residuals) {
-  const size_t xsize = dc.xsize() / 2;
-  const size_t ysize = dc.ysize();
-
-  FixedW<PixelNeighborsUV>::Shrink(xsize, dc.Row(0), residuals->Row(0));
+  FixedW<PixelNeighborsY>::Shrink(xsize, rect_in.ConstRow(in_y, 0),
+                                  rect_res.Row(residuals, 0));
 
   if (ysize >= 2) {
     // Only one previous row, so row_t == row_m.
-    Adaptive<PixelNeighborsUV>::Shrink(xsize, dc_y.Row(0), dc_y.Row(1),
-                                       dc.Row(0), dc.Row(0), dc.Row(1),
-                                       residuals->Row(1));
+    Adaptive<PixelNeighborsY>::Shrink(
+        xsize, nullptr, nullptr, rect_in.ConstRow(in_y, 0),
+        rect_in.ConstRow(in_y, 0), rect_in.ConstRow(in_y, 1),
+        rect_res.Row(residuals, 1));
   }
 
   for (size_t y = 2; y < ysize; ++y) {
-    Adaptive<PixelNeighborsUV>::Shrink(xsize, dc_y.Row(y - 1), dc_y.Row(y),
-                                       dc.Row(y - 2), dc.Row(y - 1), dc.Row(y),
-                                       residuals->Row(y));
+    Adaptive<PixelNeighborsY>::Shrink(
+        xsize, nullptr, nullptr, rect_in.ConstRow(in_y, y - 2),
+        rect_in.ConstRow(in_y, y - 1), rect_in.ConstRow(in_y, y),
+        rect_res.Row(residuals, y));
   }
 }
 
-void ExpandY(const Image<DC>& residuals, Image<DC>* const PIK_RESTRICT dc) {
-  const size_t xsize = dc->xsize();
-  const size_t ysize = dc->ysize();
+void ExpandY(const Rect& rect, const ImageS& residuals,
+             ImageS* PIK_RESTRICT tmp_expanded) {
+  const size_t xsize = rect.xsize();
+  const size_t ysize = rect.ysize();
+  PIK_ASSERT(xsize <= tmp_expanded->xsize() && ysize <= tmp_expanded->ysize());
 
-  FixedW<PixelNeighborsY>::Expand(xsize, residuals.Row(0), dc->Row(0));
+  FixedW<PixelNeighborsY>::Expand(xsize, rect.ConstRow(residuals, 0),
+                                  tmp_expanded->Row(0));
 
   if (ysize >= 2) {
-    Adaptive<PixelNeighborsY>::Expand(xsize, nullptr, nullptr, residuals.Row(1),
-                                      dc->Row(0), dc->Row(0), dc->Row(1));
+    Adaptive<PixelNeighborsY>::Expand(
+        xsize, nullptr, nullptr, rect.ConstRow(residuals, 1),
+        tmp_expanded->ConstRow(0), tmp_expanded->ConstRow(0),
+        tmp_expanded->Row(1));
   }
 
   for (size_t y = 2; y < ysize; ++y) {
-    Adaptive<PixelNeighborsY>::Expand(xsize, nullptr, nullptr, residuals.Row(y),
-                                      dc->Row(y - 2), dc->Row(y - 1),
-                                      dc->Row(y));
+    Adaptive<PixelNeighborsY>::Expand(
+        xsize, nullptr, nullptr, rect.ConstRow(residuals, y),
+        tmp_expanded->ConstRow(y - 2), tmp_expanded->ConstRow(y - 1),
+        tmp_expanded->Row(y));
   }
 }
 
-void ExpandUV(const Image<DC>& dc_y, const Image<DC>& residuals,
-              Image<DC>* const PIK_RESTRICT dc) {
-  const size_t xsize = dc->xsize() / 2;
-  const size_t ysize = dc->ysize();
+void ShrinkXB(const Rect& rect, const ImageS& in_y, const ImageS& tmp_xb,
+              ImageS* PIK_RESTRICT tmp_xb_residuals) {
+  const size_t xsize = rect.xsize();
+  const size_t ysize = rect.ysize();
+  PIK_ASSERT(SameSize(tmp_xb, *tmp_xb_residuals));
+  PIK_ASSERT(tmp_xb.xsize() >= xsize && tmp_xb.ysize() >= ysize);
 
-  FixedW<PixelNeighborsUV>::Expand(xsize, residuals.Row(0), dc->Row(0));
+  FixedW<PixelNeighborsXB>::Shrink(xsize, tmp_xb.ConstRow(0),
+                                   tmp_xb_residuals->Row(0));
 
   if (ysize >= 2) {
-    Adaptive<PixelNeighborsUV>::Expand(xsize, dc_y.Row(0), dc_y.Row(1),
-                                       residuals.Row(1), dc->Row(0), dc->Row(0),
-                                       dc->Row(1));
+    // Only one previous row, so row_t == row_m.
+    Adaptive<PixelNeighborsXB>::Shrink(
+        xsize, rect.ConstRow(in_y, 0), rect.ConstRow(in_y, 1),
+        tmp_xb.ConstRow(0), tmp_xb.ConstRow(0), tmp_xb.ConstRow(1),
+        tmp_xb_residuals->Row(1));
   }
 
   for (size_t y = 2; y < ysize; ++y) {
-    Adaptive<PixelNeighborsUV>::Expand(xsize, dc_y.Row(y - 1), dc_y.Row(y),
-                                       residuals.Row(y), dc->Row(y - 2),
-                                       dc->Row(y - 1), dc->Row(y));
+    Adaptive<PixelNeighborsXB>::Shrink(
+        xsize, rect.ConstRow(in_y, y - 1), rect.ConstRow(in_y, y),
+        tmp_xb.ConstRow(y - 2), tmp_xb.ConstRow(y - 1), tmp_xb.ConstRow(y),
+        tmp_xb_residuals->Row(y));
+  }
+}
+
+void ExpandXB(const size_t xsize, const size_t ysize, const ImageS& tmp_y,
+              const ImageS& tmp_xb_residuals,
+              ImageS* PIK_RESTRICT tmp_xb_expanded) {
+  PIK_ASSERT(tmp_y.xsize() >= xsize && tmp_y.ysize() >= ysize);
+  PIK_ASSERT(tmp_y.xsize() >= xsize && tmp_y.ysize() >= ysize);
+  PIK_ASSERT(SameSize(tmp_xb_residuals, *tmp_xb_expanded));
+
+  FixedW<PixelNeighborsXB>::Expand(xsize, tmp_xb_residuals.ConstRow(0),
+                                   tmp_xb_expanded->Row(0));
+
+  if (ysize >= 2) {
+    Adaptive<PixelNeighborsXB>::Expand(
+        xsize, tmp_y.ConstRow(0), tmp_y.ConstRow(1),
+        tmp_xb_residuals.ConstRow(1), tmp_xb_expanded->ConstRow(0),
+        tmp_xb_expanded->ConstRow(0), tmp_xb_expanded->Row(1));
+  }
+
+  for (size_t y = 2; y < ysize; ++y) {
+    Adaptive<PixelNeighborsXB>::Expand(
+        xsize, tmp_y.ConstRow(y - 1), tmp_y.ConstRow(y),
+        tmp_xb_residuals.ConstRow(y), tmp_xb_expanded->ConstRow(y - 2),
+        tmp_xb_expanded->ConstRow(y - 1), tmp_xb_expanded->Row(y));
   }
 }
 
 }  // namespace
 }  // namespace SIMD_NAMESPACE
 
-void ShrinkY(const Image<DC>& dc, Image<DC>* const PIK_RESTRICT residuals) {
-  SIMD_NAMESPACE::ShrinkY(dc, residuals);
+void ShrinkY(const Rect& rect_in, const ImageS& in_y, const Rect& rect_res,
+             ImageS* PIK_RESTRICT residuals) {
+  SIMD_NAMESPACE::ShrinkY(rect_in, in_y, rect_res, residuals);
 }
 
-void ShrinkUV(const Image<DC>& dc_y, const Image<DC>& dc,
-              Image<DC>* const PIK_RESTRICT residuals) {
-  SIMD_NAMESPACE::ShrinkUV(dc_y, dc, residuals);
+void ExpandY(const Rect& rect, const ImageS& residuals,
+             ImageS* PIK_RESTRICT tmp_expanded) {
+  SIMD_NAMESPACE::ExpandY(rect, residuals, tmp_expanded);
 }
 
-void ExpandY(const Image<DC>& residuals, Image<DC>* const PIK_RESTRICT dc) {
-  SIMD_NAMESPACE::ExpandY(residuals, dc);
+void ShrinkXB(const Rect& rect, const ImageS& in_y, const ImageS& tmp_xb,
+              ImageS* PIK_RESTRICT tmp_xb_residuals) {
+  SIMD_NAMESPACE::ShrinkXB(rect, in_y, tmp_xb, tmp_xb_residuals);
 }
 
-void ExpandUV(const Image<DC>& dc_y, const Image<DC>& residuals,
-              Image<DC>* const PIK_RESTRICT dc) {
-  SIMD_NAMESPACE::ExpandUV(dc_y, residuals, dc);
+void ExpandXB(const size_t xsize, const size_t ysize, const ImageS& tmp_y,
+              const ImageS& tmp_xb_residuals,
+              ImageS* PIK_RESTRICT tmp_xb_expanded) {
+  SIMD_NAMESPACE::ExpandXB(xsize, ysize, tmp_y, tmp_xb_residuals,
+                           tmp_xb_expanded);
 }
 
 }  // namespace pik

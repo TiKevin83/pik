@@ -1,9 +1,6 @@
-PNG_FLAGS := $(shell pkg-config --cflags libpng)
-PNG_LIBS := $(shell pkg-config --libs libpng)
-
 SIMD_FLAGS := -DSIMD_ENABLE=4 -msse4.2 -maes
 override CXXFLAGS += -std=c++11 -Wall -O3 -fPIC -I. -I../ -Ithird_party/brotli/c/include/ -Wno-sign-compare
-override LDFLAGS += $(PNG_LIBS) -ljpeg -lpthread
+override LDFLAGS += -lpthread
 
 PIK_OBJS := $(addprefix obj/, \
 	simd/dispatch.o \
@@ -12,7 +9,6 @@ PIK_OBJS := $(addprefix obj/, \
 	guetzli/debug_print.o \
 	guetzli/entropy_encode.o \
 	guetzli/fdct.o \
-	guetzli/gamma_correct.o \
 	guetzli/idct.o \
 	guetzli/jpeg_data.o \
 	guetzli/jpeg_data_decoder.o \
@@ -25,11 +21,13 @@ PIK_OBJS := $(addprefix obj/, \
 	guetzli/preprocess_downsample.o \
 	guetzli/quantize.o \
 	guetzli/score.o \
+	third_party/lodepng/lodepng.o \
 	adaptive_quantization.o \
 	af_edge_preserving_filter.o \
 	af_edge_preserving_filter_none.o \
 	af_stats.o \
 	alpha_blend.o \
+	ans_common.o \
 	ans_decode.o \
 	ans_encode.o \
 	arch_specific.o \
@@ -49,34 +47,30 @@ PIK_OBJS := $(addprefix obj/, \
 	gamma_correct.o \
 	gauss_blur.o \
 	header.o \
-	histogram_decode.o \
 	linalg.o \
 	pik.o \
 	pik_alpha.o \
 	pik_info.o \
 	huffman_decode.o \
 	huffman_encode.o \
-	histogram.o \
-	histogram_decode.o \
-	histogram_encode.o \
 	image_io.o \
 	jpeg_quant_tables.o \
 	lehmer_code.o \
 	noise.o \
-	opsin_codec.o \
+	entropy_coder.o \
 	opsin_inverse.o \
 	opsin_image.o \
 	opsin_params.o \
 	os_specific.o \
 	padded_bytes.o \
 	quantizer.o \
+	sections.o \
 	tile_flow.o \
 	upscaler.o \
 	yuv_convert.o \
-	yuv_opsin_convert.o \
 )
 
-all: $(addprefix bin/, cpik dpik butteraugli_main png2y4m y4m2png)
+all: $(addprefix bin/, cpik dpik butteraugli_main)
 
 # print an error message with helpful instructions if the brotli git submodule
 # is not checked out
@@ -95,12 +89,10 @@ obj/af_edge_preserving_filter_none.o: af_edge_preserving_filter.cc
 bin/cpik: $(PIK_OBJS) obj/cpik.o third_party/brotli/libbrotli.a
 bin/dpik: $(PIK_OBJS) obj/dpik.o third_party/brotli/libbrotli.a
 bin/butteraugli_main: $(PIK_OBJS) obj/butteraugli_main.o third_party/brotli/libbrotli.a
-bin/png2y4m: $(PIK_OBJS) obj/png2y4m.o third_party/brotli/libbrotli.a
-bin/y4m2png: $(PIK_OBJS) obj/y4m2png.o third_party/brotli/libbrotli.a
 
 obj/%.o: %.cc
 	@mkdir -p -- $(dir $@)
-	$(CXX) -c $(CPPFLAGS) $(CXXFLAGS) $(SIMD_FLAGS) $(PNG_FLAGS) $< -o $@
+	$(CXX) -c $(CPPFLAGS) $(CXXFLAGS) $(SIMD_FLAGS) $< -o $@
 
 bin/%: obj/%.o
 	@mkdir -p -- $(dir $@)
